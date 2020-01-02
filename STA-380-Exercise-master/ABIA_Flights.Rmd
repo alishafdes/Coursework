@@ -1,0 +1,257 @@
+---
+title: "Flights at ABIA"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Visual story telling
+
+This markdown file contains a detailed exploratory analysis of flight data at the Austin ABIA Airport and derives interesting findings for the same 
+
+```{r, echo = FALSE, include=FALSE}
+library(ggplot2)
+#library(ggmap)
+library(dplyr)
+library(tidyverse)
+```
+
+## Reading the files Abia and airport codes
+```{r, echo = FALSE}
+abia = read.csv("ABIA.csv", stringsAsFactors = F)
+#airport_codes = read.csv("airport_codes.csv", stringsAsFactors = F)
+```
+
+
+#### Data Cleaning and Manupulation ####
+## Adding another column "day_phase" and "day_phase_arr" which groups the deperature time and arrival time into following groups: 
+#### If time is between 0:00 to 6:00 then its early morning
+#### If time is between 6:00 to 12:00 then its is morning
+#### If the time is between 12:00 to 15:00 then it is afternoon
+#### If the time is between 15:00 to 20:00 then it is evening 
+#### from 20:00 to 0:00 it is night
+```{r, echo = FALSE}
+#### imputing NA values as 0 in abia data 
+abia_clean <- abia
+  
+for(i in 1:nrow(abia_clean)){
+  
+  if(is.na(abia_clean[i,'CarrierDelay']) == T) {
+  abia_clean[i,'CarrierDelay'] = 0 } 
+ if(is.na(abia_clean[i,'NASDelay']) == T) {
+  abia_clean[i,'NASDelay'] = 0 } 
+if(is.na(abia_clean[i,'LateAircraftDelay']) == T) {
+  abia_clean[i,'LateAircraftDelay'] = 0 }
+  if(is.na(abia_clean[i,'SecurityDelay']) == T) {
+  abia_clean[i,'SecurityDelay'] = 0 } 
+  if(is.na(abia_clean[i,'WeatherDelay']) == T) {
+  abia_clean[i,'WeatherDelay'] = 0 } 
+  if(is.na(abia_clean[i,'ArrDelay']) == T) {
+  abia_clean[i,'ArrDelay'] = 0 } 
+  if(is.na(abia_clean[i,'DepDelay']) == T) {
+  abia_clean[i,'DepDelay'] = 0 } 
+}
+#### Filtering out the rows have arrival time or departure time as NA. These generally correspond to cancelled flights
+abia_clean_new <- abia_clean[which(is.na(abia_clean$ArrTime) == F) ,]
+abia_clean_new <- abia_clean[which(is.na(abia_clean$DepTime) == F) ,]
+#### Creating a new column called phase of the day 
+abia_clean_new$dayphase <- ifelse(abia_clean_new$DepTime <=600,"Early Morning",ifelse(abia_clean_new$DepTime<=1200,"Morning", ifelse(abia_clean_new$DepTime<=1500,"Afternoon", ifelse(abia_clean_new$DepTime<=2000,"Evening","Night") ))) 
+abia_clean_new$dayphasearr <- ifelse(abia_clean_new$ArrTime <=600,"Early Morning",ifelse(abia_clean_new$ArrTime<=1200,"Morning", ifelse(abia_clean_new$ArrTime<=1500,"Afternoon", ifelse(abia_clean_new$ArrTime<=2000,"Evening","Night") ))) 
+```
+
+
+Moving ahead and doing EDA on ABIA data only 
+
+The unique carriers are:
+```{r, echo=FALSE}
+print(unique(abia_clean_new$UniqueCarrier))
+```
+
+The unique origins are:
+```{r echo=FALSE}
+cat("\n")
+print(unique(abia_clean_new$Origin))
+```
+
+## Plotting total number of flights per carrier and operating per airport
+```{r echo = FALSE}
+par(mfrow=c(2,2))
+abia_clean_new_grouped_carrier <- abia_clean_new%>%
+  group_by(UniqueCarrier)%>%
+  summarize(flightnumber = length(unique(FlightNum)))%>% arrange(desc(UniqueCarrier))
+require(forcats)
+ggplot(abia_clean_new_grouped_carrier, aes(x= reorder(UniqueCarrier, -flightnumber), y=(flightnumber)))+
+  geom_bar(stat = 'identity', fill = 'dark cyan')+
+  ggtitle("Number of flights for each carrier")+ 
+  xlab("Unique Carrier") +
+  ylab("Number of flights") 
+# ggplot(abia_clean_new,aes(x=Origin, y=FlightNum))+
+#   geom_bar(stat = 'identity')+
+#   coord_flip()
+```
+
+We can see that the my carrier "WN" has one of the busiest flights having most number of them departing from Austin. By checking on google, it tells me these are South West Airlines. 
+
+
+#### Finding out the average delay time in departure from Austin Airport per carrier per phase of the day 
+```{r echo = FALSE}
+## Calculating average delay per shift 
+abia_clean_new_dep <- abia_clean_new[which(abia_clean_new$Origin == 'AUS'),]
+
+
+abia_clean_new_grouped <- abia_clean_new_dep%>%
+  group_by(dayphase,UniqueCarrier)%>%
+  summarize(avgdelay = median(DepDelay))
+
+neworder <- c('Early Morning','Morning','Afternoon','Evening','Night')
+
+plotdata <- transform(abia_clean_new_grouped,
+      dayphase=factor(dayphase,levels=c('Early Morning','Morning','Afternoon','Evening','Night')))
+
+## Maping it to average 
+ggplot(plotdata,aes(x=reorder(UniqueCarrier, -avgdelay), y=avgdelay ))+
+  geom_bar(stat = 'identity')+
+  facet_wrap(~ as.factor(dayphase), nrow = 5, scales = 'free')+aes(fill = as.factor(dayphase))+
+  scale_fill_brewer(palette="Dark2")+
+  ggtitle("median Delay Time of carriers by Day Phase")+
+  xlab("Carriers")+
+  ylab("Median Delay")
+
+```
+
+We can see that :
+#### Finding out the average delay time in departure from Austin Airport per carrier per phase of the day 
+```{r echo = FALSE}
+
+
+## Calculating average delay per shift 
+abia_clean_new_grouped <- abia_clean_new_dep%>%
+  group_by(DayOfWeek,dayphase,UniqueCarrier)%>%
+  summarize(avgdelay = median(DepDelay))
+# 
+# plotdata2 <- transform(abia_clean_new_grouped,
+#       DayOfWeek=factor(DayOfWeek, level = c('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')))
+
+
+plotdata2 <- transform(abia_clean_new_grouped,
+      dayphase=factor(dayphase,levels=c('Early Morning','Morning','Afternoon','Evening','Night')))
+
+
+## Maping it to average 
+ggplot(plotdata2,aes(x=UniqueCarrier, y=avgdelay ))+
+  geom_bar(stat = 'identity')+
+  facet_grid(  DayOfWeek ~ dayphase , scales = 'free')+aes(fill = as.factor(DayOfWeek))+ 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  scale_fill_brewer(palette="Dark2")+
+  ggtitle("Median Departure Delay by each Carrier on Different Days of Week")+
+  xlab("Carriers")+
+  ylab("Median Departure Delay at different days of week")
+
+```
+
+In the plot above, the grid is telling me at each day of week, what is the average delay time of my carriers in different phases of the day. 
+We can see that generally, the nights have the major delays in departures at the Austin Airports .
+
+
+#### Filtering for arrivals to Austin Airport and running the analysis again
+```{r echo= FALSE}
+abia_clean_new_arr <- abia_clean_new[which(abia_clean_new$Dest == 'AUS'),]
+abia_clean_new_arr <- abia_clean_new_arr[which(is.na(abia_clean_new_arr$dayphasearr) == FALSE),]
+
+## Calculating average delay per shift 
+abia_clean_new_grouped <- abia_clean_new_arr%>%
+  group_by(DayOfWeek,dayphasearr,UniqueCarrier)%>%
+  summarize(avgdelay = median(ArrDelay))
+
+## Reordering the table for plot
+plotdata2 <- transform(abia_clean_new_grouped,
+      dayphasearr=factor(dayphasearr,levels=c('Early Morning','Morning','Afternoon','Evening','Night')))
+
+## Maping it to average 
+ggplot(plotdata2,aes(x=UniqueCarrier, y=avgdelay ))+
+  geom_bar(stat = 'identity')+
+  facet_grid(  DayOfWeek ~ dayphasearr , scales = 'free')+ 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +aes(fill = as.factor(DayOfWeek))+
+  scale_fill_brewer(palette="Dark2")+
+  ggtitle("Median Arrival Delay by each Carrier on Different Days of Week at Austin Airport")+
+  xlab("Carriers")+
+  ylab("Median Departure Delay at different days of week")
+
+```
+
+We can see from the plot above that generally flights coming at early morning tend to arrive late.
+
+## Plotting some extra graphs to see further general trends:
+
+```{r echo = FALSE}
+
+abia_clean_new_arrdest <- abia_clean_new
+abia_clean_new_arrdest$places <- paste(abia_clean_new_arrdest$Origin, "-", abia_clean_new_arrdest$Dest)
+abia_clean_new_arrdest$dummy <- 1
+abia_clean_new_arrdest$delay <- ifelse(abia_clean_new_arrdest$Origin == "AUS", abia_clean_new_arrdest$DepDelay, abia_clean_new_arrdest$ArrDelay)
+
+abia_clean_new_arrdest <- abia_clean_new_arrdest[which(abia_clean_new_arrdest$places != "AUS - DSM"),]
+abia_clean_new_arrdest <- abia_clean_new_arrdest[which(abia_clean_new_arrdest$places != "TYS - AUS"),]
+
+
+abia_clean_new_arrdest1 <- abia_clean_new_arrdest%>%
+  group_by( places ) %>%
+  summarize(numvalue = mean(delay))
+
+
+abia_clean_new_arrdest1$class <- "Mean Delay"
+
+
+abia_clean_new_arrdest2 <- abia_clean_new_arrdest%>%
+  group_by( places ) %>%
+  summarize(numvalue = length(TailNum))
+
+abia_clean_new_arrdest2$class <- "Number of Flights"
+
+
+abia_clean_new_arrdest <- rbind(abia_clean_new_arrdest1,abia_clean_new_arrdest2)
+
+
+#par(mfrow = c(1,2))
+ggplot(abia_clean_new_arrdest, aes(x= reorder(places, -numvalue), y= numvalue))+
+         geom_bar(stat = 'identity')+
+  facet_wrap(~class, nrow = 2, scales = 'free')+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  scale_fill_brewer(palette="Dark2")+
+  xlab("Carriers")+
+  ylab("")
+
+```
+
+
+We can see that the flights between IAD and AUS are the ones which fly on regular basis and are constantly delayed. Perhaps upon increasing the number of flights or changing the routes might solve the problem. 
+
+
+#### Plotting average delay and number of flights based on monthly basis:
+
+
+```{r echo = FALSE}
+
+
+## Calculating average delay per shift 
+abia_clean_new_grouped <- abia_clean_new_dep%>%
+  group_by(Month)%>%
+  summarize(flights = length(FlightNum))
+
+
+## Maping it to average 
+ggplot(abia_clean_new_grouped,aes(x=Month, y=flights ))+
+  geom_bar(stat = 'identity')
+
+```
+
+
+## Conclusion :
+
+- The South West Airlines has majority of carriers operating at the Austin Airport.
+
+- Generally, at any given day of the week, the departures at the Early Morning (till 6am) are the busiest for Arrivals, and at Evenings, its the departures which are delayed the most. So if you are travelling from Austin, avoid booking an evening flight and if you are travelling to Austin, try to avoid a flight which arrives early morning.
+
+- Generally, the airline service between Dulles, Washington (IAD) and Austin is generally delayed. Probably increasing the number of aircrafts might change the scenario.
