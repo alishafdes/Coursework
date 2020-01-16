@@ -3,6 +3,6 @@
 
 This folder contains all the mini-projects and assignments that was part of my coursework at UT Austin's MSBA Program.
 
-There are two parts to this folder, one is implemented in R (R Markdown) and the other is implemented in Python (Jupyter Notebook).
+Though most of the projects are implemented in Python (Jupyter notebook), few are implemented in R (R markdown) as well.
 
 Each folder will have its own ReadME file that will tell you more about what I have done. Each folder has the visuals and data for the corresponding notebooks.
